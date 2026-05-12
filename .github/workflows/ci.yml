@@ -43,8 +43,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R "openai/codex-action" .github templates docs README.md; then
-            echo "openai/codex-action must not appear in the 2W standard path" >&2
+          # Only workflows and portable templates define the executable 2W standard path.
+          # Documentation may mention excluded alternatives as negative guidance.
+          if grep -R "openai/codex-action" .github templates; then
+            echo "openai/codex-action must not appear in workflows or templates" >&2
             exit 1
           fi
           if grep -R "openai-api-key" .github templates; then
