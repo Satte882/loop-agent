@@ -72,7 +72,7 @@ jobs:
             await github.rest.issues.createComment({ owner, repo, issue_number, body: '2W_RUNNING: local self-hosted runner started `codex exec`.' });
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ github.token }}
