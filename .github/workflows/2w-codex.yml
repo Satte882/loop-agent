@@ -50,12 +50,13 @@ jobs:
             const hasReadyLabel = labels.includes('2w:ready');
             const hasReadyTitle = issue.title.startsWith('2W_READY:');
             const isClosed = issue.state !== 'open';
+            const isAlreadyActive = labels.includes('2w:running') || labels.includes('2w:done');
 
             core.setOutput('issue_number', String(issueNumber));
             core.setOutput('issue_title', issue.title || '');
             core.setOutput('issue_body_b64', Buffer.from(issue.body || '', 'utf8').toString('base64'));
 
-            if (isClosed || (!hasReadyLabel && !hasReadyTitle)) {
+            if (isClosed || isAlreadyActive || (!hasReadyLabel && !hasReadyTitle)) {
               core.setOutput('should_run', 'false');
               return;
             }
