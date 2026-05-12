@@ -1,0 +1,96 @@
+name: CI Smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Repository smoke checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Check required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_files=(
+            "README.md"
+            ".github/workflows/2w-codex.yml"
+            ".github/ISSUE_TEMPLATE/2w-workblock.yml"
+            "templates/2w-local-codex.yml"
+            "templates/ISSUE_TEMPLATE/2w-workblock.yml"
+            "docs/INSTALL_IN_TARGET_REPO.md"
+            "docs/AUTH_WITH_CHATGPT_PLUS.md"
+            "docs/VALIDATE_CODEX_CLI_LOGIN.md"
+            "docs/2W_PROTOCOL.md"
+            "docs/LOCAL_SETUP.md"
+            "docs/VALIDATION.md"
+            "docs/SECURITY.md"
+            ".gitignore"
+          )
+          for file in "${required_files[@]}"; do
+            test -f "$file"
+          done
+
+      - name: Check standard path exclusions
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R "openai/codex-action" .github templates docs README.md; then
+            echo "openai/codex-action must not appear in the 2W standard path" >&2
+            exit 1
+          fi
+          if grep -R "openai-api-key" .github templates; then
+            echo "openai-api-key must not appear in workflows or templates" >&2
+            exit 1
+          fi
+          if grep -R "OPENAI_API_KEY" .github templates; then
+            echo "OPENAI_API_KEY must not appear in workflows or templates" >&2
+            exit 1
+          fi
+
+      - name: Check workflow invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "runs-on: [self-hosted]" .github/workflows/2w-codex.yml
+          grep -F "codex exec" .github/workflows/2w-codex.yml
+          grep -F "2W_DONE" .github/workflows/2w-codex.yml
+          grep -F "2W_FAILED" .github/workflows/2w-codex.yml
+          grep -F "runs-on: [self-hosted]" templates/2w-local-codex.yml
+          grep -F "codex exec" templates/2w-local-codex.yml
+          grep -F "2W_DONE" templates/2w-local-codex.yml
+          grep -F "2W_FAILED" templates/2w-local-codex.yml
+
+      - name: Check issue template defaults
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "title: \"2W_READY: \"" .github/ISSUE_TEMPLATE/2w-workblock.yml
+          grep -F "title: \"2W_READY: \"" templates/ISSUE_TEMPLATE/2w-workblock.yml
+          grep -F "required: true" .github/ISSUE_TEMPLATE/2w-workblock.yml
+          grep -F "required: true" templates/ISSUE_TEMPLATE/2w-workblock.yml
+
+      - name: Check runtime artifact exclusions
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx ".2w/" .gitignore
+          grep -Fx ".env" .gitignore
+          grep -Fx ".env.*" .gitignore
+
+      - name: Check no personal Windows path in docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R "C:\\Users\\user\\Documents\\GitHub\\loop-agent" docs README.md .github templates; then
+            echo "Personal local path must not be documented as a generic requirement" >&2
+            exit 1
+          fi
