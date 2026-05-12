@@ -2,18 +2,33 @@
 
 `loop-agent` ist ein portables 2W-Starterkit für eine einfache ChatGPT ↔ GitHub Issues ↔ lokale Codex-CLI-Rückkopplung.
 
-## Ziel
+## Zielbild
 
-Nach der Zieldefinition soll der Nutzer möglichst aus dem operativen Hin-und-Her herausfallen:
+Der Nutzer definiert mit ChatGPT ein Ziel und einen kleinen Arbeitsblock. ChatGPT schreibt diesen Arbeitsblock als GitHub Issue in das jeweilige Zielrepo. Das Issue wird durch `2W_READY:` im Titel oder das Label `2w:ready` startfähig. Ein lokaler self-hosted GitHub Actions Runner erkennt das startfähige Issue, ruft im Zielrepo die lokal installierte Codex CLI mit `codex exec` auf und übergibt den Issue-Inhalt als Arbeitsauftrag.
 
-1. ChatGPT formuliert einen kleinen Arbeitsblock als GitHub Issue.
-2. Das Issue wird durch das Label `2w:ready` oder den Titelpräfix `2W_READY:` startfähig gemacht.
-3. Ein GitHub Actions Workflow läuft auf einem lokalen self-hosted Runner.
-4. Der Runner startet die lokal installierte und bereits eingeloggte Codex CLI mit `codex exec`.
-5. Codex setzt den Arbeitsblock im jeweiligen Zielrepo um.
-6. Der Workflow committet und pusht die Änderungen nach erfolgreichen Minimalchecks.
-7. Der Workflow kommentiert das Issue mit Status, Commit-SHA, Tests und geänderten Dateien.
-8. ChatGPT prüft GitHub und erstellt den nächsten Arbeitsblock oder einen Fix-Block.
+Codex bearbeitet den Arbeitsblock im Repository. Nach der Bearbeitung führt der Workflow verfügbare Checks aus. Wenn der Lauf erfolgreich ist, committet und pusht der Workflow die Änderung direkt in das Zielrepo. Danach kommentiert der Workflow das Issue mit Commit-SHA, Teststatus und geänderten Dateien.
+
+ChatGPT liest anschließend den Issue-Kommentar, den Commit und den Diff über GitHub, bewertet das Ergebnis und entscheidet den nächsten Schritt: fertig, Fix-Block oder Folge-Arbeitsblock. Der nächste Block wird wieder als GitHub Issue erzeugt und startet denselben Ablauf. Ziel ist ein einfacher Arbeitskreislauf, bei dem der Nutzer nach der Zieldefinition nicht mehr als manueller Bote zwischen ChatGPT, GitHub und Codex CLI gebraucht wird.
+
+## Ablauf
+
+1. Nutzer und ChatGPT definieren Ziel und Arbeitsblock.
+2. ChatGPT erstellt ein GitHub Issue im Zielrepo.
+3. Das Issue ist startfähig durch Titelpräfix `2W_READY:` oder Label `2w:ready`.
+4. Ein self-hosted GitHub Actions Runner startet den Workflow.
+5. Der Workflow ruft lokal `codex exec` auf.
+6. Codex setzt den Arbeitsblock im Zielrepo um.
+7. Der Workflow führt verfügbare Checks aus.
+8. Bei erfolgreichem Lauf committet und pusht der Workflow.
+9. Der Workflow kommentiert das Issue mit Ergebnisdaten.
+10. ChatGPT prüft Commit, Diff und Issue-Kommentar über GitHub.
+11. ChatGPT erstellt bei Bedarf den nächsten Issue-Block oder einen Fix-Block.
+
+## Aktuelle Nähe zum Zielbild
+
+Der GitHub-seitige Kern ist vorbereitet: Workflow, Issue-Template, portable Templates und Dokumentation sind vorhanden. Der Standardpfad nutzt lokale Codex CLI und verlangt keinen `OPENAI_API_KEY`.
+
+Noch nicht bewiesen ist der wichtigste praktische Punkt: Ob `codex exec` im Kontext des self-hosted Runners mit dem lokalen Login ohne interaktive Anmeldung funktioniert. Ebenfalls noch nicht vollständig gelöst ist ein echter automatischer Trigger zurück in dieses offene ChatGPT-Fenster. Der belastbare Rückkanal ist aktuell GitHub: Issue-Kommentar, Commit-SHA und Diff.
 
 ## Wichtige Entscheidung
 
@@ -49,11 +64,11 @@ Stattdessen muss Codex CLI lokal auf dem self-hosted Runner verfügbar und berei
 
 ## Betriebsmodell
 
-Die GitHub-Historie ist die Wahrheitsquelle. Das ChatGPT-Fenster ist nur ein Trigger- und Prüfkanal. Lange Logs, vollständige Diffs und Secrets gehören nicht in den Chat.
+Die GitHub-Historie ist die Wahrheitsquelle. Das ChatGPT-Fenster ist ein Planungs- und Prüfkanal. Lange Logs, vollständige Diffs und sensible Inhalte gehören nicht in den Chat.
 
 ## 2W v0 in einem Satz
 
-ChatGPT erstellt ein startfähiges GitHub Issue, der self-hosted Runner führt lokal `codex exec` aus, der Workflow committet und kommentiert, ChatGPT prüft GitHub und startet den nächsten Block.
+ChatGPT erzeugt ein startfähiges GitHub Issue, der lokale self-hosted Runner führt `codex exec` aus, der Workflow committet und kommentiert, ChatGPT prüft GitHub und startet den nächsten Block.
 
 ## Harte Grenzen
 
