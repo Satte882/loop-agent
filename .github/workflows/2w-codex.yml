@@ -275,6 +275,32 @@ jobs:
             ].join('\n');
             await github.rest.issues.createComment({ owner, repo, issue_number, body });
 
+  run_watcher:
+    name: Run watcher callback
+    needs: [prepare, local_codex, report_success]
+    if: needs.prepare.outputs.should_run == 'true' && success()
+    runs-on: [self-hosted]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Run local 2W watcher
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            Write-Error 'gh CLI not found on self-hosted runner PATH'
+            exit 127
+          }
+          if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+            Write-Error 'codex CLI not found on self-hosted runner PATH'
+            exit 127
+          }
+          .\scripts\2w-watcher.ps1 -Repo "${{ github.repository }}" -Mode OneShot -MaxIssuesPerRun 1
+
   report_failure:
     name: Report failure
     needs: [prepare, local_codex]
