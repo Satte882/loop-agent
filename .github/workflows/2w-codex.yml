@@ -1,0 +1,264 @@
+name: 2W Codex Relay
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to run as 2W workblock"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: 2w-codex-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare 2W workblock
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+      issue_number: ${{ steps.gate.outputs.issue_number }}
+      issue_title: ${{ steps.gate.outputs.issue_title }}
+      issue_body: ${{ steps.gate.outputs.issue_body }}
+    steps:
+      - name: Gate issue trigger
+        id: gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isDispatch = context.eventName === 'workflow_dispatch';
+            const issueNumber = isDispatch
+              ? Number(core.getInput('issue_number'))
+              : context.payload.issue?.number;
+
+            if (!issueNumber) {
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+            const labels = issue.labels.map((label) => typeof label === 'string' ? label : label.name);
+            const hasReadyLabel = labels.includes('2w:ready');
+            const hasReadyTitle = issue.title.startsWith('2W_READY:');
+            const isClosed = issue.state !== 'open';
+
+            if (isClosed || (!hasReadyLabel && !hasReadyTitle)) {
+              core.setOutput('should_run', 'false');
+              core.setOutput('issue_number', String(issueNumber));
+              core.setOutput('issue_title', issue.title || '');
+              core.setOutput('issue_body', issue.body || '');
+              return;
+            }
+
+            core.setOutput('should_run', 'true');
+            core.setOutput('issue_number', String(issueNumber));
+            core.setOutput('issue_title', issue.title || '');
+            core.setOutput('issue_body', issue.body || '');
+
+  codex:
+    name: Run Codex locally
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: [self-hosted]
+    timeout-minutes: 30
+    outputs:
+      final_message: ${{ steps.run_codex.outputs.final-message }}
+      commit_sha: ${{ steps.commit.outputs.commit_sha }}
+      changed_files: ${{ steps.diff.outputs.changed_files }}
+      tests_status: ${{ steps.tests.outputs.tests_status }}
+    steps:
+      - name: Mark issue running
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = Number('${{ needs.prepare.outputs.issue_number }}');
+            const { owner, repo } = context.repo;
+            await github.rest.issues.removeLabel({ owner, repo, issue_number, name: '2w:ready' }).catch(() => {});
+            await github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['2w:running'] }).catch(() => {});
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: '2W_RUNNING: self-hosted runner started Codex for this workblock.'
+            });
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build Codex prompt
+        run: |
+          mkdir -p .2w
+          cat > .2w/current_prompt.md <<'PROMPT'
+          # 2W Workblock
+
+          You are Codex CLI running inside a self-hosted GitHub Actions runner for repository `${{ github.repository }}`.
+
+          ## Source issue
+
+          Issue: #${{ needs.prepare.outputs.issue_number }}
+          Title: ${{ needs.prepare.outputs.issue_title }}
+
+          ## User workblock
+
+          ${{ needs.prepare.outputs.issue_body }}
+
+          ## Mandatory constraints
+
+          - Keep the change as small as possible.
+          - Work only inside this repository checkout.
+          - Do not print secrets, tokens, environment variables, or full credential-bearing config.
+          - Do not create branches or pull requests.
+          - Do not commit or push yourself; leave file changes in the working tree for the workflow.
+          - Prefer direct edits over new abstractions.
+          - If the task is unsafe, ambiguous, or impossible, stop and explain in the final message.
+          - End with a compact result summary containing STATUS, CHANGED_FILES, TESTS, RISKS, NEXT.
+
+          ## Desired final message format
+
+          STATUS: DONE | BLOCKED | FAILED
+          CHANGED_FILES:
+          TESTS:
+          RISKS:
+          NEXT:
+          PROMPT
+
+      - name: Run Codex
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .2w/current_prompt.md
+          output-file: .2w/codex_final_message.md
+          sandbox: workspace-write
+          safety-strategy: ${{ runner.os == 'Windows' && 'unsafe' || 'drop-sudo' }}
+
+      - name: Collect changed files
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short > .2w/git_status.txt
+          git diff --name-only > .2w/changed_files.txt
+          if [ -s .2w/changed_files.txt ]; then
+            {
+              echo 'changed_files<<EOF'
+              cat .2w/changed_files.txt
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed_files=' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run repository checks when available
+        id: tests
+        shell: bash
+        run: |
+          set +e
+          status="not_configured"
+          if [ -f package.json ]; then
+            npm test --if-present
+            rc=$?
+            if [ "$rc" -eq 0 ]; then status="green:npm-test"; else status="failed:npm-test:$rc"; fi
+          elif [ -f pyproject.toml ] || [ -f pytest.ini ]; then
+            python -m pytest
+            rc=$?
+            if [ "$rc" -eq 0 ]; then status="green:pytest"; else status="failed:pytest:$rc"; fi
+          else
+            status="not_configured:no-package-or-pytest"
+            rc=0
+          fi
+          echo "tests_status=$status" >> "$GITHUB_OUTPUT"
+          exit "$rc"
+
+      - name: Commit and push changes
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo "commit_sha=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "2W: issue #${{ needs.prepare.outputs.issue_number }}"
+          git push origin HEAD:${{ github.ref_name }}
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  report_success:
+    name: Report success
+    needs: [prepare, codex]
+    if: needs.prepare.outputs.should_run == 'true' && success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment result
+        uses: actions/github-script@v7
+        env:
+          FINAL_MESSAGE: ${{ needs.codex.outputs.final_message }}
+          COMMIT_SHA: ${{ needs.codex.outputs.commit_sha }}
+          CHANGED_FILES: ${{ needs.codex.outputs.changed_files }}
+          TESTS_STATUS: ${{ needs.codex.outputs.tests_status }}
+        with:
+          script: |
+            const issue_number = Number('${{ needs.prepare.outputs.issue_number }}');
+            const { owner, repo } = context.repo;
+            await github.rest.issues.removeLabel({ owner, repo, issue_number, name: '2w:running' }).catch(() => {});
+            await github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['2w:done'] }).catch(() => {});
+            const body = [
+              '2W_DONE',
+              '',
+              `repo=${owner}/${repo}`,
+              `issue=#${issue_number}`,
+              `commit=${process.env.COMMIT_SHA || 'none'}`,
+              `tests=${process.env.TESTS_STATUS || 'unknown'}`,
+              '',
+              'Changed files:',
+              '```text',
+              process.env.CHANGED_FILES || 'none',
+              '```',
+              '',
+              'Codex final message:',
+              '```text',
+              process.env.FINAL_MESSAGE || 'No final message returned.',
+              '```',
+              '',
+              'ChatGPT instruction: Prüfe Commit/Diff über GitHub und starte den nächsten 2W-Block oder einen FIX-Block.'
+            ].join('\n');
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+  report_failure:
+    name: Report failure
+    needs: [prepare, codex]
+    if: needs.prepare.outputs.should_run == 'true' && failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = Number('${{ needs.prepare.outputs.issue_number }}');
+            const { owner, repo } = context.repo;
+            await github.rest.issues.removeLabel({ owner, repo, issue_number, name: '2w:running' }).catch(() => {});
+            await github.rest.issues.addLabels({ owner, repo, issue_number, labels: ['2w:failed'] }).catch(() => {});
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: '2W_FAILED: Workflow failed. Prüfe GitHub Actions Logs auf dem self-hosted Runner.'
+            });
