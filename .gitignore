@@ -1,0 +1,20 @@
+# 2W runtime artifacts
+.2w/
+
+# Local runner files
+.actions-runner/
+actions-runner/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
