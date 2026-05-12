@@ -6,8 +6,8 @@ Lokale Voraussetzungen für 2W mit lokaler Codex CLI.
 
 ## Voraussetzungen
 
-- Lokales Repository: `C:\Users\user\Documents\GitHub\loop-agent`
-- GitHub Actions self-hosted Runner
+- Lokales Repository-Checkout des Zielrepos, beliebiger Pfad
+- GitHub Actions self-hosted Runner, registriert für das Zielrepo
 - Lokal installierte Codex CLI
 - `codex exec` läuft im Runner-Kontext ohne Rückfrage
 - GitHub Actions ist im Zielrepo aktiviert
@@ -18,13 +18,17 @@ Lokale Voraussetzungen für 2W mit lokaler Codex CLI.
 
 Der Workflow ruft lokal `codex exec` auf.
 
-## Runner
+## Runner registrieren
 
 Der Runner wird pro Zielrepo über GitHub registriert:
 
 `Settings -> Actions -> Runners -> New self-hosted runner`
 
 Der Runner muss mit dem Label `self-hosted` verfügbar sein.
+
+## Wichtiger Hinweis: prepare-Job
+
+Der `prepare`-Job läuft auf `ubuntu-latest`. Dieser Job liest nur das Issue und prüft Trigger-Bedingungen. Der eigentliche Codex-Job läuft auf dem self-hosted Runner. Beide Runner müssen für das Zielrepo erreichbar sein.
 
 ## Start
 
