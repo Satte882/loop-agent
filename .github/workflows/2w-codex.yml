@@ -163,13 +163,13 @@ jobs:
           $rc = $LASTEXITCODE
           "codex_status=$rc" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if (-not (Test-Path .2w/codex_final_message.md)) {
-            @"
-            STATUS: FAILED
-            CHANGED_FILES:
-            TESTS: codex exec returned $rc before writing final message
-            RISKS: local Codex CLI command, login, or flags may not match this runner
-            NEXT: validate local codex exec command manually on the runner
-            "@ | Set-Content .2w/codex_final_message.md
+            @(
+              'STATUS: FAILED'
+              'CHANGED_FILES:'
+              "TESTS: codex exec returned $rc before writing final message"
+              'RISKS: local Codex CLI command, login, or flags may not match this runner'
+              'NEXT: validate local codex exec command manually on the runner'
+            ) | Set-Content .2w/codex_final_message.md
           }
           exit $rc
 
@@ -179,8 +179,18 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path .2w | Out-Null
-          git status --short | Set-Content .2w/git_status.txt
-          Get-Content .2w/git_status.txt | Where-Object { $_ -notmatch '^\?\? \.2w/' } | Set-Content .2w/changed_files.txt
+          $gitStatus = git status --short
+          $gitStatus | Set-Content .2w/git_status.txt
+          if (-not (Test-Path .2w/git_status.txt)) {
+            Set-Content -Path .2w/git_status.txt -Value ''
+          }
+          $changedFiles = @(
+            Get-Content .2w/git_status.txt | Where-Object { $_ -notmatch '^\?\? \.2w/' }
+          )
+          $changedFiles | Set-Content .2w/changed_files.txt
+          if (-not (Test-Path .2w/changed_files.txt)) {
+            Set-Content -Path .2w/changed_files.txt -Value ''
+          }
           if ((Get-Item .2w/changed_files.txt).Length -gt 0) {
             "changed_files<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
             Get-Content .2w/changed_files.txt | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
