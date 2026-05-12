@@ -78,114 +78,135 @@ jobs:
           token: ${{ github.token }}
 
       - name: Configure git identity
-        shell: bash
+        shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Verify local Codex CLI login
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          command -v codex >/dev/null 2>&1
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+            Write-Error 'codex CLI not found on self-hosted runner PATH'
+            exit 127
+          }
           codex --version
 
       - name: Build Codex prompt
-        shell: bash
+        shell: pwsh
         env:
           ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.prepare.outputs.issue_title }}
           ISSUE_BODY_B64: ${{ needs.prepare.outputs.issue_body_b64 }}
         run: |
-          set -euo pipefail
-          mkdir -p .2w
-          printf '%s' "$ISSUE_BODY_B64" | base64 --decode > .2w/issue_body.md
-          {
-            printf '%s\n' '# 2W Workblock'
-            printf '\n'
-            printf '%s\n' 'You are Codex CLI running locally inside a self-hosted GitHub Actions runner.'
-            printf '\n'
-            printf '%s\n' 'Mandatory constraints:'
-            printf '%s\n' '- Keep the change as small as possible.'
-            printf '%s\n' '- Work only inside this repository checkout.'
-            printf '%s\n' '- Do not print secrets, tokens, environment variables, browser session data, or credential-bearing config.'
-            printf '%s\n' '- Do not create branches or pull requests.'
-            printf '%s\n' '- Do not commit or push yourself; leave file changes in the working tree for the workflow.'
-            printf '%s\n' '- If blocked, write BLOCKED to `.2w/codex_final_message.md`.'
-            printf '%s\n' '- End by writing STATUS, CHANGED_FILES, TESTS, RISKS, NEXT to `.2w/codex_final_message.md`.'
-            printf '\n'
-            printf '%s\n' 'Source issue:'
-            printf 'Issue: #%s\n' "$ISSUE_NUMBER"
-            printf 'Title: %s\n' "$ISSUE_TITLE"
-            printf '\n'
-            cat .2w/issue_body.md
-          } > .2w/current_prompt.md
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path .2w | Out-Null
+          [System.IO.File]::WriteAllBytes('.2w/issue_body.md', [Convert]::FromBase64String($env:ISSUE_BODY_B64))
+          $issueBody = Get-Content .2w/issue_body.md -Raw
+          $template = @'
+# 2W Workblock
+
+You are Codex CLI running locally inside a self-hosted GitHub Actions runner.
+
+## Repository
+
+__REPOSITORY__
+
+## Mandatory constraints
+
+- Keep the change as small as possible.
+- Work only inside this repository checkout.
+- Do not print secrets, tokens, environment variables, browser session data, or credential-bearing config.
+- Do not create branches or pull requests.
+- Do not commit or push yourself; leave file changes in the working tree for the workflow.
+- If blocked, write BLOCKED to `.2w/codex_final_message.md`.
+- End by writing STATUS, CHANGED_FILES, TESTS, RISKS, NEXT to `.2w/codex_final_message.md`.
+
+## Source issue
+
+Issue: #__ISSUE_NUMBER__
+Title: __ISSUE_TITLE__
+
+## User workblock
+
+__ISSUE_BODY__
+'@
+          $currentPrompt = $template.Replace('__REPOSITORY__', $env:GITHUB_REPOSITORY).Replace('__ISSUE_NUMBER__', $env:ISSUE_NUMBER).Replace('__ISSUE_TITLE__', $env:ISSUE_TITLE).Replace('__ISSUE_BODY__', $issueBody)
+          Set-Content -Path .2w/current_prompt.md -Value $currentPrompt
 
       - name: Run local Codex CLI
         id: codex
-        shell: bash
+        shell: pwsh
         run: |
-          set +e
-          codex exec --sandbox workspace-write --skip-git-repo-check --output-last-message .2w/codex_final_message.md "$(cat .2w/current_prompt.md)"
-          rc=$?
-          echo "codex_status=$rc" >> "$GITHUB_OUTPUT"
-          if [ ! -f .2w/codex_final_message.md ]; then
-            echo "STATUS: FAILED" > .2w/codex_final_message.md
-            echo "TESTS: codex exec returned $rc before writing final message" >> .2w/codex_final_message.md
-          fi
-          exit "$rc"
+          $ErrorActionPreference = 'Continue'
+          & codex exec --sandbox workspace-write --skip-git-repo-check --output-last-message .2w/codex_final_message.md (Get-Content .2w/current_prompt.md -Raw)
+          $rc = $LASTEXITCODE
+          "codex_status=$rc" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if (-not (Test-Path .2w/codex_final_message.md)) {
+            @"
+STATUS: FAILED
+CHANGED_FILES:
+TESTS: codex exec returned $rc before writing final message
+RISKS: local Codex CLI command, login, or flags may not match this runner
+NEXT: validate local codex exec command manually on the runner
+"@ | Set-Content .2w/codex_final_message.md
+          }
+          exit $rc
 
       - name: Collect changed files
         id: diff
         if: always()
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p .2w
-          git status --short > .2w/git_status.txt
-          grep -v '^?? .2w/' .2w/git_status.txt > .2w/changed_files.txt || true
-          if [ -s .2w/changed_files.txt ]; then
-            echo 'changed_files<<EOF' >> "$GITHUB_OUTPUT"
-            cat .2w/changed_files.txt >> "$GITHUB_OUTPUT"
-            echo 'EOF' >> "$GITHUB_OUTPUT"
-          else
-            echo 'changed_files=' >> "$GITHUB_OUTPUT"
-          fi
+          New-Item -ItemType Directory -Force -Path .2w | Out-Null
+          git status --short | Set-Content .2w/git_status.txt
+          Get-Content .2w/git_status.txt | Where-Object { $_ -notmatch '^\?\? \.2w/' } | Set-Content .2w/changed_files.txt
+          if ((Get-Item .2w/changed_files.txt).Length -gt 0) {
+            "changed_files<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Get-Content .2w/changed_files.txt | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            "changed_files=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
 
       - name: Run repository checks when available
         id: tests
-        shell: bash
+        shell: pwsh
         run: |
-          set +e
-          status="not_configured"
-          if [ -f package.json ]; then
+          $ErrorActionPreference = 'Continue'
+          $status = 'not_configured'
+          $rc = 0
+          if (Test-Path package.json) {
             npm test --if-present
-            rc=$?
-            [ "$rc" -eq 0 ] && status="green:npm-test" || status="failed:npm-test:$rc"
-          elif [ -f pyproject.toml ] || [ -f pytest.ini ]; then
+            $rc = $LASTEXITCODE
+            if ($rc -eq 0) { $status = 'green:npm-test' } else { $status = "failed:npm-test:$rc" }
+          } elseif ((Test-Path pyproject.toml) -or (Test-Path pytest.ini)) {
             python -m pytest
-            rc=$?
-            [ "$rc" -eq 0 ] && status="green:pytest" || status="failed:pytest:$rc"
-          else
-            rc=0
-            status="not_configured:no-package-or-pytest"
-          fi
-          echo "tests_status=$status" >> "$GITHUB_OUTPUT"
-          exit "$rc"
+            $rc = $LASTEXITCODE
+            if ($rc -eq 0) { $status = 'green:pytest' } else { $status = "failed:pytest:$rc" }
+          } else {
+            $status = 'not_configured:no-package-or-pytest'
+            $rc = 0
+          }
+          "tests_status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          exit $rc
 
       - name: Commit and push changes
         id: commit
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
+          $ErrorActionPreference = 'Stop'
           git add -A
-          git reset -- .2w || true
-          if git diff --cached --quiet; then
-            echo "commit_sha=" >> "$GITHUB_OUTPUT"
+          git reset -- .2w
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            "commit_sha=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
             exit 0
-          fi
+          }
           git commit -m "2W: issue #${{ needs.prepare.outputs.issue_number }}"
           git push origin HEAD:${{ github.ref_name }}
-          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          "commit_sha=$(git rev-parse HEAD)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
   report_success:
     name: Report success
