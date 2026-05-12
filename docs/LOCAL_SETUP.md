@@ -2,55 +2,37 @@
 
 ## Ziel
 
-Dieses Dokument beschreibt die lokalen Schritte, die nicht im Repository vorab erledigt werden können.
+Lokale Voraussetzungen für 2W mit lokaler Codex CLI.
 
 ## Voraussetzungen
 
 - Lokales Repository: `C:\Users\user\Documents\GitHub\loop-agent`
-- GitHub Actions self-hosted Runner auf dem Rechner des Nutzers
-- Repository Secret `OPENAI_API_KEY`
-- GitHub Actions im Repository aktiviert
+- GitHub Actions self-hosted Runner
+- Lokal installierte Codex CLI
+- `codex exec` läuft im Runner-Kontext ohne Rückfrage
+- GitHub Actions ist im Zielrepo aktiviert
 
-## Lokaler Runner
+## Kein API-Key im Standardpfad
 
-Der Runner muss für `Satte882/loop-agent` registriert werden und mit dem Label `self-hosted` verfügbar sein.
+2W v0 nutzt im Standardpfad keinen `OPENAI_API_KEY` und nicht `openai/codex-action@v1`.
 
-GitHub-Pfad:
+Der Workflow ruft lokal `codex exec` auf.
+
+## Runner
+
+Der Runner wird pro Zielrepo über GitHub registriert:
 
 `Settings -> Actions -> Runners -> New self-hosted runner`
 
-Danach den von GitHub angezeigten Installationsbefehlen folgen. Der Token ist kurzlebig und darf nicht committed werden.
+Der Runner muss mit dem Label `self-hosted` verfügbar sein.
 
-## Repository Secret
+## Start
 
-GitHub-Pfad:
+Ein Issue startet den Lauf, wenn eine Bedingung gilt:
 
-`Settings -> Secrets and variables -> Actions -> New repository secret`
-
-Name:
-
-`OPENAI_API_KEY`
-
-Wert:
-
-Persönlicher OpenAI API Key für Codex Action.
-
-## Start eines 2W-Laufs
-
-Ein Issue startet den Workflow, wenn eine der Bedingungen erfüllt ist:
-
-- Label `2w:ready`
 - Titel beginnt mit `2W_READY:`
+- Label `2w:ready` ist gesetzt
 
-Der Titelpräfix ist der robuste Fallback, falls das Label noch nicht existiert.
+## Nutzungsmodell
 
-## Lokale Validierung
-
-Nach dem Fetch soll Cline prüfen:
-
-- Workflow-Datei ist syntaktisch gültiges YAML.
-- Workflow nutzt `runs-on: [self-hosted]` für Codex.
-- Workflow hat keine Cloud-Ausführung für Codex.
-- Workflow startet nur bei startfähigem Issue.
-- Workflow kommentiert Erfolg und Fehler ins Issue.
-- Dokumentation passt zum Workflow.
+ChatGPT erstellt ein Issue. Der Runner startet. Codex bearbeitet das Repo. Der Workflow committet und kommentiert. ChatGPT prüft GitHub.
