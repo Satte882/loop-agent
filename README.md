@@ -2,6 +2,16 @@
 
 `loop-agent` ist ein portables 2W-Starterkit für eine einfache ChatGPT ↔ GitHub Issues ↔ lokale Codex-CLI-Rückkopplung.
 
+## Aktueller Validierungsstand
+
+Stand: GitHub-/Cline-ready mit 95 %, End-to-End-bewiesen mit 0 %.
+
+Letzter validierter Stand: `834722ab5a5696e507608428d430b6ed63b1c969`.
+
+Die lokale Cline-Validierung meldete GREEN: lokaler `main` ist mit `origin/main` synchron, Pflichtdateien sind vorhanden, `CI Smoke` ist plausibel, Runtime-Dateien sind API-Key-frei, `actions/checkout@v4` ist gesetzt, Shell-Titelbehandlung ist abgesichert und `changed_files` erfasst auch neue Dateien.
+
+Noch nicht bewiesen ist der echte self-hosted Runner-Pfad: Runner-Registrierung, `codex` im Runner-PATH, `codex --version`, nicht-interaktives `codex exec` und ein erstes `2W_READY:`-Test-Issue.
+
 ## Zielbild
 
 Der Nutzer definiert mit ChatGPT ein Ziel und einen kleinen Arbeitsblock. ChatGPT schreibt diesen Arbeitsblock als GitHub Issue in das jeweilige Zielrepo. Das Issue wird durch `2W_READY:` im Titel oder das Label `2w:ready` startfähig. Ein lokaler self-hosted GitHub Actions Runner erkennt das startfähige Issue, ruft im Zielrepo die lokal installierte Codex CLI mit `codex exec` auf und übergibt den Issue-Inhalt als Arbeitsauftrag.
@@ -26,7 +36,7 @@ ChatGPT liest anschließend den Issue-Kommentar, den Commit und den Diff über G
 
 ## Aktuelle Nähe zum Zielbild
 
-Der GitHub-seitige Kern ist vorbereitet: Workflow, Issue-Template, portable Templates und Dokumentation sind vorhanden. Der Standardpfad nutzt lokale Codex CLI und verlangt keinen `OPENAI_API_KEY`.
+Der GitHub-seitige Kern ist vorbereitet und validiert: Workflow, Issue-Template, portable Templates, Smoke-CI und Dokumentation sind vorhanden. Der Standardpfad nutzt lokale Codex CLI und verlangt keinen `OPENAI_API_KEY`.
 
 Noch nicht bewiesen ist der wichtigste praktische Punkt: Ob `codex exec` im Kontext des self-hosted Runners mit dem lokalen Login ohne interaktive Anmeldung funktioniert. Ebenfalls noch nicht vollständig gelöst ist ein echter automatischer Trigger zurück in dieses offene ChatGPT-Fenster. Der belastbare Rückkanal ist aktuell GitHub: Issue-Kommentar, Commit-SHA und Diff.
 
@@ -51,6 +61,7 @@ Stattdessen muss Codex CLI lokal auf dem self-hosted Runner verfügbar und berei
 | Datei | Zweck |
 |---|---|
 | `.github/workflows/2w-codex.yml` | Lokaler 2W-Workflow für dieses Repo |
+| `.github/workflows/ci.yml` | Smoke-CI für Repo-Struktur und Runtime-Invarianten |
 | `.github/ISSUE_TEMPLATE/2w-workblock.yml` | Issue-Vorlage für 2W-Arbeitsblöcke |
 | `templates/2w-local-codex.yml` | Portabler Workflow für andere Repos |
 | `templates/ISSUE_TEMPLATE/2w-workblock.yml` | Portables Issue-Template für andere Repos |
