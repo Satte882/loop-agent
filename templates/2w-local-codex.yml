@@ -43,7 +43,11 @@ jobs:
             const { owner, repo } = context.repo;
             const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
             const labels = issue.labels.map((label) => typeof label === 'string' ? label : label.name);
-            const runnable = issue.state === 'open' && (labels.includes('2w:ready') || issue.title.startsWith('2W_READY:'));
+            const hasReadyLabel = labels.includes('2w:ready');
+            const hasReadyTitle = issue.title.startsWith('2W_READY:');
+            const isClosed = issue.state !== 'open';
+            const isAlreadyActive = labels.includes('2w:running') || labels.includes('2w:done');
+            const runnable = issue.state === 'open' && !isAlreadyActive && (hasReadyLabel || hasReadyTitle);
             core.setOutput('should_run', runnable ? 'true' : 'false');
             core.setOutput('issue_number', String(issueNumber));
             core.setOutput('issue_title', issue.title || '');
