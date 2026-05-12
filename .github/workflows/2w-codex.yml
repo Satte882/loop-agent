@@ -1,4 +1,4 @@
-name: 2W Codex Relay
+name: 2W Local Codex Relay
 
 on:
   issues:
@@ -16,7 +16,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: 2w-codex-${{ github.event.issue.number || inputs.issue_number }}
+  group: 2w-local-codex-${{ github.repository }}-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
       should_run: ${{ steps.gate.outputs.should_run }}
       issue_number: ${{ steps.gate.outputs.issue_number }}
       issue_title: ${{ steps.gate.outputs.issue_title }}
-      issue_body: ${{ steps.gate.outputs.issue_body }}
+      issue_body_b64: ${{ steps.gate.outputs.issue_body_b64 }}
     steps:
       - name: Gate issue trigger
         id: gate
@@ -51,30 +51,28 @@ jobs:
             const hasReadyTitle = issue.title.startsWith('2W_READY:');
             const isClosed = issue.state !== 'open';
 
+            core.setOutput('issue_number', String(issueNumber));
+            core.setOutput('issue_title', issue.title || '');
+            core.setOutput('issue_body_b64', Buffer.from(issue.body || '', 'utf8').toString('base64'));
+
             if (isClosed || (!hasReadyLabel && !hasReadyTitle)) {
               core.setOutput('should_run', 'false');
-              core.setOutput('issue_number', String(issueNumber));
-              core.setOutput('issue_title', issue.title || '');
-              core.setOutput('issue_body', issue.body || '');
               return;
             }
 
             core.setOutput('should_run', 'true');
-            core.setOutput('issue_number', String(issueNumber));
-            core.setOutput('issue_title', issue.title || '');
-            core.setOutput('issue_body', issue.body || '');
 
-  codex:
-    name: Run Codex locally
+  local_codex:
+    name: Run local Codex CLI
     needs: prepare
     if: needs.prepare.outputs.should_run == 'true'
     runs-on: [self-hosted]
     timeout-minutes: 30
     outputs:
-      final_message: ${{ steps.run_codex.outputs.final-message }}
       commit_sha: ${{ steps.commit.outputs.commit_sha }}
       changed_files: ${{ steps.diff.outputs.changed_files }}
       tests_status: ${{ steps.tests.outputs.tests_status }}
+      codex_status: ${{ steps.codex.outputs.codex_status }}
     steps:
       - name: Mark issue running
         uses: actions/github-script@v7
@@ -88,7 +86,7 @@ jobs:
               owner,
               repo,
               issue_number,
-              body: '2W_RUNNING: self-hosted runner started Codex for this workblock.'
+              body: '2W_RUNNING: local self-hosted runner started `codex exec` for this workblock.'
             });
 
       - name: Checkout repository
@@ -98,62 +96,82 @@ jobs:
           token: ${{ github.token }}
 
       - name: Configure git identity
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Build Codex prompt
+      - name: Verify local Codex CLI login
+        shell: bash
         run: |
+          set -euo pipefail
+          if ! command -v codex >/dev/null 2>&1; then
+            echo "codex CLI not found on self-hosted runner PATH" >&2
+            exit 127
+          fi
+          codex --version
+
+      - name: Build Codex prompt
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p .2w
-          cat > .2w/current_prompt.md <<'PROMPT'
+          printf '%s' '${{ needs.prepare.outputs.issue_body_b64 }}' | base64 --decode > .2w/issue_body.md
+          cat > .2w/current_prompt.md <<'PROMPT_HEADER'
           # 2W Workblock
 
-          You are Codex CLI running inside a self-hosted GitHub Actions runner for repository `${{ github.repository }}`.
+          You are Codex CLI running locally inside a self-hosted GitHub Actions runner.
 
-          ## Source issue
+          ## Repository
 
-          Issue: #${{ needs.prepare.outputs.issue_number }}
-          Title: ${{ needs.prepare.outputs.issue_title }}
-
-          ## User workblock
-
-          ${{ needs.prepare.outputs.issue_body }}
+          ${GITHUB_REPOSITORY}
 
           ## Mandatory constraints
 
           - Keep the change as small as possible.
           - Work only inside this repository checkout.
-          - Do not print secrets, tokens, environment variables, or full credential-bearing config.
+          - Do not print secrets, tokens, environment variables, browser session data, or credential-bearing config.
           - Do not create branches or pull requests.
           - Do not commit or push yourself; leave file changes in the working tree for the workflow.
           - Prefer direct edits over new abstractions.
-          - If the task is unsafe, ambiguous, or impossible, stop and explain in the final message.
-          - End with a compact result summary containing STATUS, CHANGED_FILES, TESTS, RISKS, NEXT.
+          - If the task is unsafe, ambiguous, or impossible, stop and write BLOCKED in `.2w/codex_final_message.md`.
+          - End by writing a compact result summary to `.2w/codex_final_message.md` with STATUS, CHANGED_FILES, TESTS, RISKS, NEXT.
 
-          ## Desired final message format
+          ## Source issue
 
-          STATUS: DONE | BLOCKED | FAILED
-          CHANGED_FILES:
-          TESTS:
-          RISKS:
-          NEXT:
-          PROMPT
+          PROMPT_HEADER
+          {
+            echo "Issue: #${{ needs.prepare.outputs.issue_number }}"
+            echo "Title: ${{ needs.prepare.outputs.issue_title }}"
+            echo
+            echo "## User workblock"
+            cat .2w/issue_body.md
+          } >> .2w/current_prompt.md
 
-      - name: Run Codex
-        id: run_codex
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: .2w/current_prompt.md
-          output-file: .2w/codex_final_message.md
-          sandbox: workspace-write
-          safety-strategy: ${{ runner.os == 'Windows' && 'unsafe' || 'drop-sudo' }}
+      - name: Run local Codex CLI
+        id: codex
+        shell: bash
+        run: |
+          set +e
+          codex exec --sandbox workspace-write --skip-git-repo-check --output-last-message .2w/codex_final_message.md "$(cat .2w/current_prompt.md)"
+          rc=$?
+          echo "codex_status=$rc" >> "$GITHUB_OUTPUT"
+          if [ ! -f .2w/codex_final_message.md ]; then
+            echo "STATUS: FAILED" > .2w/codex_final_message.md
+            echo "CHANGED_FILES:" >> .2w/codex_final_message.md
+            echo "TESTS: codex exec returned $rc before writing final message" >> .2w/codex_final_message.md
+            echo "RISKS: local Codex CLI command, login, or flags may not match this runner" >> .2w/codex_final_message.md
+            echo "NEXT: validate local codex exec command manually on the runner" >> .2w/codex_final_message.md
+          fi
+          exit "$rc"
 
       - name: Collect changed files
         id: diff
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p .2w
           git status --short > .2w/git_status.txt
           git diff --name-only > .2w/changed_files.txt
           if [ -s .2w/changed_files.txt ]; then
@@ -193,6 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           git add -A
+          git reset -- .2w || true
           if git diff --cached --quiet; then
             echo "commit_sha=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -203,17 +222,17 @@ jobs:
 
   report_success:
     name: Report success
-    needs: [prepare, codex]
+    needs: [prepare, local_codex]
     if: needs.prepare.outputs.should_run == 'true' && success()
     runs-on: ubuntu-latest
     steps:
       - name: Comment result
         uses: actions/github-script@v7
         env:
-          FINAL_MESSAGE: ${{ needs.codex.outputs.final_message }}
-          COMMIT_SHA: ${{ needs.codex.outputs.commit_sha }}
-          CHANGED_FILES: ${{ needs.codex.outputs.changed_files }}
-          TESTS_STATUS: ${{ needs.codex.outputs.tests_status }}
+          COMMIT_SHA: ${{ needs.local_codex.outputs.commit_sha }}
+          CHANGED_FILES: ${{ needs.local_codex.outputs.changed_files }}
+          TESTS_STATUS: ${{ needs.local_codex.outputs.tests_status }}
+          CODEX_STATUS: ${{ needs.local_codex.outputs.codex_status }}
         with:
           script: |
             const issue_number = Number('${{ needs.prepare.outputs.issue_number }}');
@@ -227,15 +246,11 @@ jobs:
               `issue=#${issue_number}`,
               `commit=${process.env.COMMIT_SHA || 'none'}`,
               `tests=${process.env.TESTS_STATUS || 'unknown'}`,
+              `codex_exit_code=${process.env.CODEX_STATUS || 'unknown'}`,
               '',
               'Changed files:',
               '```text',
               process.env.CHANGED_FILES || 'none',
-              '```',
-              '',
-              'Codex final message:',
-              '```text',
-              process.env.FINAL_MESSAGE || 'No final message returned.',
               '```',
               '',
               'ChatGPT instruction: Prüfe Commit/Diff über GitHub und starte den nächsten 2W-Block oder einen FIX-Block.'
@@ -244,7 +259,7 @@ jobs:
 
   report_failure:
     name: Report failure
-    needs: [prepare, codex]
+    needs: [prepare, local_codex]
     if: needs.prepare.outputs.should_run == 'true' && failure()
     runs-on: ubuntu-latest
     steps:
@@ -260,5 +275,5 @@ jobs:
               owner,
               repo,
               issue_number,
-              body: '2W_FAILED: Workflow failed. Prüfe GitHub Actions Logs auf dem self-hosted Runner.'
+              body: '2W_FAILED: local Codex CLI workflow failed. Prüfe GitHub Actions Logs auf dem self-hosted Runner. Wahrscheinliche Ursachen: `codex` nicht im PATH, lokaler Login fehlt, oder CLI-Flags passen nicht zur installierten Codex-Version.'
             });
