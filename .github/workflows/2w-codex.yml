@@ -118,32 +118,30 @@ jobs:
           mkdir -p .2w
           printf '%s' '${{ needs.prepare.outputs.issue_body_b64 }}' | base64 --decode > .2w/issue_body.md
           {
-            cat <<'PROMPT_HEADER'
-# 2W Workblock
-
-You are Codex CLI running locally inside a self-hosted GitHub Actions runner.
-
-## Repository
-
-${GITHUB_REPOSITORY}
-
-## Mandatory constraints
-
-- Keep the change as small as possible.
-- Work only inside this repository checkout.
-- Do not print secrets, tokens, environment variables, browser session data, or credential-bearing config.
-- Do not create branches or pull requests.
-- Do not commit or push yourself; leave file changes in the working tree for the workflow.
-- Prefer direct edits over new abstractions.
-- If the task is unsafe, ambiguous, or impossible, stop and write BLOCKED in `.2w/codex_final_message.md`.
-- End by writing a compact result summary to `.2w/codex_final_message.md` with STATUS, CHANGED_FILES, TESTS, RISKS, NEXT.
-
-## Source issue
-PROMPT_HEADER
+            printf '%s\n' '# 2W Workblock'
+            printf '\n'
+            printf '%s\n' 'You are Codex CLI running locally inside a self-hosted GitHub Actions runner.'
+            printf '\n'
+            printf '%s\n' '## Repository'
+            printf '\n'
+            printf '%s\n' "$GITHUB_REPOSITORY"
+            printf '\n'
+            printf '%s\n' '## Mandatory constraints'
+            printf '\n'
+            printf '%s\n' '- Keep the change as small as possible.'
+            printf '%s\n' '- Work only inside this repository checkout.'
+            printf '%s\n' '- Do not print secrets, tokens, environment variables, browser session data, or credential-bearing config.'
+            printf '%s\n' '- Do not create branches or pull requests.'
+            printf '%s\n' '- Do not commit or push yourself; leave file changes in the working tree for the workflow.'
+            printf '%s\n' '- Prefer direct edits over new abstractions.'
+            printf '%s\n' '- If the task is unsafe, ambiguous, or impossible, stop and write BLOCKED in `.2w/codex_final_message.md`.'
+            printf '%s\n' '- End by writing a compact result summary to `.2w/codex_final_message.md` with STATUS, CHANGED_FILES, TESTS, RISKS, NEXT.'
+            printf '\n'
+            printf '%s\n' '## Source issue'
             printf 'Issue: #%s\n' '${{ needs.prepare.outputs.issue_number }}'
             printf 'Title: %s\n' '${{ needs.prepare.outputs.issue_title }}'
-            echo
-            echo '## User workblock'
+            printf '\n'
+            printf '%s\n' '## User workblock'
             cat .2w/issue_body.md
           } > .2w/current_prompt.md
 
