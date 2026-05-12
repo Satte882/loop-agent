@@ -77,6 +77,8 @@ Stattdessen muss Codex CLI lokal auf dem self-hosted Runner verfügbar und berei
 
 Die GitHub-Historie ist die Wahrheitsquelle. Das ChatGPT-Fenster ist ein Planungs- und Prüfkanal. Lange Logs, vollständige Diffs und sensible Inhalte gehören nicht in den Chat.
 
+`scripts/2w-watcher.ps1` ist der lokale Callback-Loop nach `2W_DONE`.
+
 ## 2W v0 in einem Satz
 
 ChatGPT erzeugt ein startfähiges GitHub Issue, der lokale self-hosted Runner führt `codex exec` aus, der Workflow committet und kommentiert, ChatGPT prüft GitHub und startet den nächsten Block.

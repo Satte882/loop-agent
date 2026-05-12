@@ -256,3 +256,35 @@ Ein erster Watcher-Test gilt als erfolgreich, wenn:
 Der Watcher macht 2W nicht zu einem vollwertigen Agentensystem. Er schließt nur den Callback-Loop zwischen Ergebnis und nächstem Arbeitsblock.
 
 Wenn später komplexere Ziele, Priorisierung, Budgets, Risikostufen oder mehrstufige Strategien nötig werden, muss das gesondert entschieden werden. Für v1 bleibt der Watcher klein, lokal und begrenzt.
+
+## Nutzung v1
+
+Voraussetzungen:
+
+- `gh` ist lokal installiert und angemeldet
+- `codex` ist lokal installiert und angemeldet
+- kein `OPENAI_API_KEY` ist erforderlich
+
+One-shot:
+
+```powershell
+.\scripts\2w-watcher.ps1 -Repo "Satte882/loop-agent" -Mode OneShot
+```
+
+DryRun:
+
+```powershell
+.\scripts\2w-watcher.ps1 -Repo "Satte882/loop-agent" -Mode OneShot -DryRun
+```
+
+Polling:
+
+```powershell
+.\scripts\2w-watcher.ps1 -Repo "Satte882/loop-agent" -Mode Poll -IntervalSeconds 60
+```
+
+Hinweise:
+
+- `2w:reviewed` ist der Dedupe-Marker für bereits verarbeitete Issues.
+- `2w:done` ist der Eingangspunkt für den lokalen Callback-Loop nach `2W_DONE`.
+- `-DryRun` schreibt keine Issues, Labels oder Kommentare.
