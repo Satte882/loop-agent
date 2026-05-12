@@ -92,10 +92,14 @@ jobs:
 
       - name: Build Codex prompt
         shell: bash
+        env:
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+          ISSUE_TITLE: ${{ needs.prepare.outputs.issue_title }}
+          ISSUE_BODY_B64: ${{ needs.prepare.outputs.issue_body_b64 }}
         run: |
           set -euo pipefail
           mkdir -p .2w
-          printf '%s' '${{ needs.prepare.outputs.issue_body_b64 }}' | base64 --decode > .2w/issue_body.md
+          printf '%s' "$ISSUE_BODY_B64" | base64 --decode > .2w/issue_body.md
           {
             printf '%s\n' '# 2W Workblock'
             printf '\n'
@@ -111,8 +115,8 @@ jobs:
             printf '%s\n' '- End by writing STATUS, CHANGED_FILES, TESTS, RISKS, NEXT to `.2w/codex_final_message.md`.'
             printf '\n'
             printf '%s\n' 'Source issue:'
-            printf 'Issue: #%s\n' '${{ needs.prepare.outputs.issue_number }}'
-            printf 'Title: %s\n' '${{ needs.prepare.outputs.issue_title }}'
+            printf 'Issue: #%s\n' "$ISSUE_NUMBER"
+            printf 'Title: %s\n' "$ISSUE_TITLE"
             printf '\n'
             cat .2w/issue_body.md
           } > .2w/current_prompt.md
@@ -137,7 +141,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p .2w
-          git diff --name-only > .2w/changed_files.txt
+          git status --short > .2w/git_status.txt
+          grep -v '^?? .2w/' .2w/git_status.txt > .2w/changed_files.txt || true
           if [ -s .2w/changed_files.txt ]; then
             echo 'changed_files<<EOF' >> "$GITHUB_OUTPUT"
             cat .2w/changed_files.txt >> "$GITHUB_OUTPUT"
