@@ -123,34 +123,34 @@ jobs:
           [System.IO.File]::WriteAllBytes('.2w/issue_body.md', [Convert]::FromBase64String($env:ISSUE_BODY_B64))
           $issueBody = Get-Content .2w/issue_body.md -Raw
           $template = @'
-# 2W Workblock
+          # 2W Workblock
 
-You are Codex CLI running locally inside a self-hosted GitHub Actions runner.
+          You are Codex CLI running locally inside a self-hosted GitHub Actions runner.
 
-## Repository
+          ## Repository
 
-__REPOSITORY__
+          __REPOSITORY__
 
-## Mandatory constraints
+          ## Mandatory constraints
 
-- Keep the change as small as possible.
-- Work only inside this repository checkout.
-- Do not print secrets, tokens, environment variables, browser session data, or credential-bearing config.
-- Do not create branches or pull requests.
-- Do not commit or push yourself; leave file changes in the working tree for the workflow.
-- Prefer direct edits over new abstractions.
-- If the task is unsafe, ambiguous, or impossible, stop and write BLOCKED in `.2w/codex_final_message.md`.
-- End by writing a compact result summary to `.2w/codex_final_message.md` with STATUS, CHANGED_FILES, TESTS, RISKS, NEXT.
+          - Keep the change as small as possible.
+          - Work only inside this repository checkout.
+          - Do not print secrets, tokens, environment variables, browser session data, or credential-bearing config.
+          - Do not create branches or pull requests.
+          - Do not commit or push yourself; leave file changes in the working tree for the workflow.
+          - Prefer direct edits over new abstractions.
+          - If the task is unsafe, ambiguous, or impossible, stop and write BLOCKED in `.2w/codex_final_message.md`.
+          - End by writing a compact result summary to `.2w/codex_final_message.md` with STATUS, CHANGED_FILES, TESTS, RISKS, NEXT.
 
-## Source issue
+          ## Source issue
 
-Issue: #__ISSUE_NUMBER__
-Title: __ISSUE_TITLE__
+          Issue: #__ISSUE_NUMBER__
+          Title: __ISSUE_TITLE__
 
-## User workblock
+          ## User workblock
 
-__ISSUE_BODY__
-'@
+          __ISSUE_BODY__
+          '@
           $currentPrompt = $template.Replace('__REPOSITORY__', $env:GITHUB_REPOSITORY).Replace('__ISSUE_NUMBER__', $env:ISSUE_NUMBER).Replace('__ISSUE_TITLE__', $env:ISSUE_TITLE).Replace('__ISSUE_BODY__', $issueBody)
           Set-Content -Path .2w/current_prompt.md -Value $currentPrompt
 
@@ -164,12 +164,12 @@ __ISSUE_BODY__
           "codex_status=$rc" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if (-not (Test-Path .2w/codex_final_message.md)) {
             @"
-STATUS: FAILED
-CHANGED_FILES:
-TESTS: codex exec returned $rc before writing final message
-RISKS: local Codex CLI command, login, or flags may not match this runner
-NEXT: validate local codex exec command manually on the runner
-"@ | Set-Content .2w/codex_final_message.md
+            STATUS: FAILED
+            CHANGED_FILES:
+            TESTS: codex exec returned $rc before writing final message
+            RISKS: local Codex CLI command, login, or flags may not match this runner
+            NEXT: validate local codex exec command manually on the runner
+            "@ | Set-Content .2w/codex_final_message.md
           }
           exit $rc
 
