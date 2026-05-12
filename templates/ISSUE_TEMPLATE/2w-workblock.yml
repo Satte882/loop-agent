@@ -12,7 +12,7 @@ body:
     attributes:
       value: |
         Kurz halten. Ein Ziel, ein kleiner Arbeitsblock, ein prüfbares Ergebnis.
-        Standardpfad: lokaler self-hosted Runner + lokale `codex exec`-Ausführung, ohne `OPENAI_API_KEY`.
+        Standardpfad: lokaler self-hosted Runner + lokale `codex exec`-Ausführung, ohne externen API-Schlüssel.
 
   - type: textarea
     id: goal
