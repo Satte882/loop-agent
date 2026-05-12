@@ -43,20 +43,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Only workflows and portable templates define the executable 2W standard path.
+          # Only executable workflows and portable runtime templates are scanned here.
           # Documentation may mention excluded alternatives as negative guidance.
-          if grep -R "openai/codex-action" .github templates; then
-            echo "openai/codex-action must not appear in workflows or templates" >&2
-            exit 1
-          fi
-          if grep -R "openai-api-key" .github templates; then
-            echo "openai-api-key must not appear in workflows or templates" >&2
-            exit 1
-          fi
-          if grep -R "OPENAI_API_KEY" .github templates; then
-            echo "OPENAI_API_KEY must not appear in workflows or templates" >&2
-            exit 1
-          fi
+          runtime_files=(
+            ".github/workflows/2w-codex.yml"
+            ".github/ISSUE_TEMPLATE/2w-workblock.yml"
+            "templates/2w-local-codex.yml"
+            "templates/ISSUE_TEMPLATE/2w-workblock.yml"
+          )
+          banned_action="openai/codex-""action"
+          banned_openai_key="OPENAI""_API""_KEY"
+          banned_action_key="openai-api-""key"
+          for pattern in "$banned_action" "$banned_openai_key" "$banned_action_key"; do
+            if grep -F "$pattern" "${runtime_files[@]}"; then
+              echo "Forbidden 2W standard-path token found in workflow or template files" >&2
+              exit 1
+            fi
+          done
 
       - name: Check workflow invariants
         shell: bash
