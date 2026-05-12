@@ -1,6 +1,6 @@
 name: 2W Workblock
 
-description: Minimaler Arbeitsblock für ChatGPT → GitHub → lokale Codex CLI → GitHub → ChatGPT
+description: Einfacher Arbeitsblock für ChatGPT → lokale Codex CLI → GitHub → ChatGPT
 
 title: "2W_READY: "
 
@@ -11,71 +11,36 @@ body:
   - type: markdown
     attributes:
       value: |
-        Dieser Arbeitsblock wird von einem lokalen self-hosted Runner verarbeitet.
-        Standardpfad: lokale `codex exec`-Ausführung mit vorhandenem lokalem Login, ohne `OPENAI_API_KEY`.
+        Kurz halten. Ein Ziel, ein kleiner Arbeitsblock, ein prüfbares Ergebnis.
+        Standardpfad: lokaler self-hosted Runner + lokale `codex exec`-Ausführung, ohne `OPENAI_API_KEY`.
 
   - type: textarea
     id: goal
     attributes:
       label: Ziel
-      description: Was soll in diesem Arbeitsblock konkret erreicht werden?
-      placeholder: "Beispiel: Ergänze eine kurze Validierungssektion in README.md."
+      description: Was soll Codex konkret erledigen?
+      placeholder: "Beispiel: Ergänze in README.md eine kurze Installationssektion für 2W."
     validations:
       required: true
 
   - type: textarea
-    id: allowed_paths
+    id: context
     attributes:
-      label: Erlaubte Pfade
-      description: Welche Dateien oder Ordner darf Codex ändern?
+      label: Kontext und Grenzen
+      description: Optional. Nur nennen, was Codex wissen oder nicht anfassen soll.
       placeholder: |
-        README.md
-        docs/
-        .github/workflows/
+        Optional:
+        - Nur README.md ändern
+        - Keine neuen Tools
+        - Keine Branches oder Pull Requests
     validations:
-      required: true
+      required: false
 
   - type: textarea
-    id: forbidden_paths
+    id: done
     attributes:
-      label: Verbotene Pfade
-      description: Welche Dateien oder Bereiche darf Codex nicht ändern?
-      placeholder: |
-        Keine Secrets
-        Keine lokalen Runner-Konfigurationsdateien
-        Keine Dateien außerhalb des Repository-Checkouts
-    validations:
-      required: true
-
-  - type: textarea
-    id: checks
-    attributes:
-      label: Erwartete Checks
-      description: Welche Prüfungen sollen laufen?
-      placeholder: |
-        - YAML-Syntax prüfen
-        - Markdown-Konsistenz prüfen
-        - Kein Secret-Output
-    validations:
-      required: true
-
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Akzeptanzkriterien
-      description: Wann ist der Arbeitsblock fertig?
-      placeholder: |
-        - Änderung ist klein und nachvollziehbar
-        - Workflow bleibt self-hosted
-        - Ergebnis wird als Issue-Kommentar gepostet
-    validations:
-      required: true
-
-  - type: textarea
-    id: notes
-    attributes:
-      label: Hinweise
-      description: Zusätzliche Einschränkungen oder Kontext.
-      placeholder: "Keine neue Engine, kein OperatorLoop, kein PR-Workflow."
+      label: Fertig wenn
+      description: Optional. Woran erkennt ChatGPT später, dass der Block erledigt ist?
+      placeholder: "Beispiel: README enthält die Sektion, Workflow bleibt unverändert, Issue-Kommentar enthält Commit-SHA."
     validations:
       required: false
